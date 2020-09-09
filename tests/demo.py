@@ -1,37 +1,57 @@
-from thread_regulator import ThreadRegulator, get_last_thread_regulator, safe_sleep
+from thread_regulator import ThreadRegulator, safe_sleep
 
 
-def demo():
+def demo_constant_rate():
     from random import choice
 
     def my_notifier(arg1, stats_dict):
         print(arg1, stats_dict)
 
-    def my_thread_call(*args):
-        safe_sleep(choice((0.016, 0.020, 0.024)))
+    def my_thread_call(*args, **kwargs):
+        safe_sleep(choice((0.1, 0.2, 0.3)))
         return True
 
-    # x = ThreadRegulator.create_burst(users=4, rps=100, req=100, dt_sec=0.5, duration_sec=None, executions=200)
-    ThreadRegulator.create_regular(users=4, rps=10.0, duration_sec=7.0, executions=0). \
-        set_notifier(my_notifier, ("notify example", ), every_sec=1, every_exec=15). \
-        start(my_thread_call, (0, ))
+    tr = ThreadRegulator.create_regular(users=4, rps=10.0, duration_sec=1.0, executions=15)
+    print(tr)
+    print("="*100)
 
-    last_thread_regulator = get_last_thread_regulator()
-    print(last_thread_regulator)
+    tr.set_notifier(my_notifier, ("notify_example_arg_1", ), every_sec=1, every_exec=8).\
+        start(my_thread_call, "arg1", "arg2", arg3="my_name", arg4="my_demo")
 
-    print("\n", "="*100)
-    print("executions started:", last_thread_regulator.get_executions_started())
-    print("percentage:", last_thread_regulator.get_percentage_complete(), "\n")
+    print("="*100)
+    print(tr.get_statistics())
+    print(tr.get_execution_dataframe().start_ts.diff().describe())
 
-    print("start:", last_thread_regulator.get_start_time())
-    print("expect end:", last_thread_regulator.get_defined_end_time())
-    print("real end:", last_thread_regulator.get_real_end_time(), "\n")
+    return tr
 
-    print("expect duration:", last_thread_regulator.get_max_duration())
-    print("real duration:", last_thread_regulator.get_real_duration())
 
-    return last_thread_regulator
+def demo_burst_mode():
+    from random import choice
+
+    def my_notifier(arg1, stats_dict):
+        print(arg1, stats_dict)
+
+    def my_thread_call(*args, **kwargs):
+        safe_sleep(choice((0.1, 0.2, 0.3)))
+        return True
+
+    tr = ThreadRegulator.create_burst(users=4, rps=10.0, duration_sec=2.0, req=10, dt_sec=0.5, executions=20)
+    print(tr)
+    print("="*100)
+
+    tr.set_notifier(my_notifier, ("notify_example_arg_1", ), every_sec=1, every_exec=8). \
+        start(my_thread_call, "arg1", "arg2", arg3="my_name", arg4="my_demo")
+
+    print("="*100)
+    print(tr.get_statistics())
+    print(tr.get_execution_dataframe().start_ts.diff().describe())
+
+    return tr
 
 
 if __name__ == "__main__":
-    demo()
+    print("RegularMode")
+    demo_constant_rate()
+
+    print("\n\nBurstMode")
+    demo_burst_mode()
