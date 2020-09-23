@@ -2,6 +2,7 @@ from threading import Thread, Lock
 from time import time, sleep
 from datetime import datetime
 from pandas import DataFrame
+from collections import Counter
 
 
 _last_thread_regulator = None
@@ -40,7 +41,7 @@ class ThreadRegulator:
                 req = executions
                 dt_sec = executions / rps
             else:
-                req = rps * duration_sec
+                req = int(rps * duration_sec)
                 dt_sec = duration_sec
         else:
             assert req, f"For burst mode you need to specify 'req' and 'dt_sec', you're missing 'req'. For regular mode, both must be equal to None"
@@ -57,6 +58,9 @@ class ThreadRegulator:
 
         # safe period that a thread can be busy without compromising other threads to keep the rps
         self.run_param["user_threadsafe_ts"] = block["ts"] * users
+
+        # total requests that should be executed in theory
+        self.run_param["max_executions"] = self._calc_max_executions_based_on_duration()
 
         # create control plane for running threads
         self.run_control = {
@@ -87,11 +91,32 @@ class ThreadRegulator:
         self.notifier = {"method": None, "args": None, "every_exec": 0, "every_sec": 0}
 
         # execution list with all entrys of:
-        #    (time_request_started, time_request_ended, request_success, user_id, block_id)
+        #    (time_request_started, time_request_ended, request_success, user_id, block_id, request_result)
         self.execution_log = list()
 
         # save last ThreadRegulator
         global _last_thread_regulator; _last_thread_regulator = self
+
+    def _calc_max_executions_based_on_duration(self):
+        # if no duration set then the maximum executions are the ones defined
+        duration = self.get_defined_duration()
+        if duration == 0.0:
+            return self.get_defined_executions()
+
+        # if not burst mode then executions = rps * duration, which is the whole burst block
+        if self.is_mode_regular():
+            return self.get_defined_burst_requests()
+
+        # (How many blocks can be sent during * how many requests each block sends) + (remaining duration * block rps)
+        total_bursts_blocks = int(duration / self.get_defined_burst_duration())
+        last_burst_requests_duration = min(self.get_defined_burst_busy(), duration - total_bursts_blocks * self.get_defined_burst_duration())
+        total_executions = int((total_bursts_blocks * self.get_defined_burst_requests()) + (last_burst_requests_duration * self.get_defined_burst_rps()))
+        print(f"{total_executions=}")
+        # if defined how many executions then return min(max executions calculated, defined executions)
+        if self.get_defined_executions():
+            return int(min(total_executions, self.get_defined_executions()))
+
+        return total_executions
 
     # <editor-fold desc=" -= class common methods =- ">
 
@@ -103,13 +128,14 @@ class ThreadRegulator:
     def create_burst(users: int, rps: float, req: int, dt_sec: float, duration_sec: float, executions: int):
         return ThreadRegulator(users, rps, req, dt_sec, duration_sec, executions)
 
-    def set_notifier(self, notify_method=print, notify_method_args=("notifier",), every_sec=5, every_exec=0):
+    def set_notifier(self, notify_method=print, every_sec=5, every_exec=0, notify_method_args=tuple(), **notify_method_kwargs):
         """
         :param notify_method: The method to be called
+        :param every_sec: Every x seconds the notify_method will be called
+        :param every_exec: Every x requests started the notify_method will be called
         :param notify_method_args: Methods args that are sent back along with statistics
-        :param every_exec: Every x executed requests will notify
-        :param every_sec: Every x seconds will notify
-        :return: will call the method with the received *args and a statistics dict with
+        :param notify_method_kwargs: Methods kwargs that are sent back along with statistics
+        :return: will call the notify_method(stats_dict, *args, **kwargs)
             {executions_started, elapsed_seconds, percentage_complete, success_ratio, ok, ko}
         """
         assert callable(notify_method), "'notify_method' must be a valid callable method with args"
@@ -121,9 +147,10 @@ class ThreadRegulator:
             assert every_sec >= 1, "'every_sec' must be >= 1"
 
         self.notifier["method"] = notify_method
-        self.notifier["args"] = notify_method_args
-        self.notifier["every_exec"] = every_exec
         self.notifier["every_sec"] = every_sec
+        self.notifier["every_exec"] = every_exec
+        self.notifier["args"] = notify_method_args
+        self.notifier["kwargs"] = notify_method_kwargs
 
         return self
 
@@ -136,44 +163,50 @@ class ThreadRegulator:
     def is_mode_burst(self) -> bool:
         return self.run_param["mode"] == "burst"
 
-    def get_users(self) -> int:
-        return self.run_param["users"]
-
     def get_user_threadsafe_period(self) -> float:
         return self.run_param["user_threadsafe_ts"]
 
-    def get_rps(self) -> float:
+    def get_defined_users(self) -> int:
+        return self.run_param["users"]
+
+    def get_defined_rps(self) -> float:
         return self.run_param["rps"]
 
-    def get_max_duration(self) -> float:
+    def get_defined_duration(self) -> float:
         return self.run_param["duration_sec"]
 
-    def get_max_executions(self) -> int:
+    def get_defined_executions(self) -> int:
         return self.run_param["executions"]
 
-    def get_burst_requests(self) -> int:
+    def get_defined_burst_requests(self) -> int:
         return self.run_param["block"]["req"]
 
-    def get_burst_rps(self) -> float:
+    def get_defined_burst_rps(self) -> float:
         return self.run_param["block"]["rps"]
 
-    def get_burst_ts(self) -> float:
+    def get_defined_burst_ts(self) -> float:
         return self.run_param["block"]["ts"]
 
-    def get_burst_duration(self) -> float:
+    def get_defined_burst_duration(self) -> float:
         return self.run_param["block"]["duration"]
 
-    def get_burst_busy(self) -> float:
+    def get_defined_burst_busy(self) -> float:
         return self.run_param["block"]["busy"]
 
-    def get_burst_idle(self) -> float:
+    def get_defined_burst_idle(self) -> float:
         return self.run_param["block"]["idle"]
+
+    def get_max_executions(self):
+        return self.run_param["max_executions"]
 
     def get_execution_list(self) -> list:
         return self.execution_log
 
+    def get_execution_counter_of_responses(self) -> dict:
+        return dict(Counter([row[-1] for row in self.execution_log]).items())
+
     def get_execution_dataframe(self) -> DataFrame:
-        df = DataFrame(self.get_execution_list(), columns=("start_ts", "end_ts", "success", "user", "block", "users_busy"))
+        df = DataFrame(self.get_execution_list(), columns=("start_ts", "end_ts", "success", "user", "block", "users_busy", "request_result"))
 
         # to set the executions to start on second x.000
         ms_diff = df.start_ts.min()
@@ -205,8 +238,8 @@ class ThreadRegulator:
         return self.run_control["running"]
 
     def get_percentage_complete(self) -> float:
-        tot_exec = round(100 * self.get_executions_started() / self.get_max_executions(), 2) if self.get_max_executions() else 0.0
-        tot_time = round(min(self.get_elapsed_time() / self.get_max_duration(), 1.0) *100, 2) if self.get_max_duration() else 0.0
+        tot_exec = round(100 * self.get_executions_started() / self.get_defined_executions(), 2) if self.get_defined_executions() else 0.0
+        tot_time = round(min(self.get_elapsed_seconds() / self.get_defined_duration(), 1.0) * 100, 2) if self.get_defined_duration() else 0.0
         return max(tot_exec, tot_time)
 
     def get_executions_started(self) -> int:
@@ -221,15 +254,23 @@ class ThreadRegulator:
     def get_ko(self) -> int:
         return self.run_control["global_ko"]
 
+    def get_executions_missing(self):
+        return max(self.get_max_executions() - self.get_executions_completed(), 0)
+
     def get_success_ratio(self) -> float:
         if self.get_executions_completed():
             return self.get_ok() / self.get_executions_completed()
         return 1.0
 
+    def get_success_ratio_overall(self) -> float:
+        if self.get_max_executions():
+            return self.get_ok() / self.get_max_executions()
+        return 1.0
+
     def get_start_timestamp(self) -> float:
         return self.run_control["global_start_time"]
 
-    def get_elapsed_time(self) -> float:
+    def get_elapsed_seconds(self) -> float:
         if self.is_running():
             return time() - self.get_start_timestamp()
         if self.get_real_end_timestamp():
@@ -242,21 +283,24 @@ class ThreadRegulator:
     def get_real_end_timestamp(self) -> float:
         return self.run_control["global_real_end_time"]
 
-    def get_real_duration(self) -> float:
-        return self.get_elapsed_time()
+    def get_executions_call_period(self):
+        return self._get_rc_block_next_run() - self.get_start_timestamp()
 
     def get_real_rps(self) -> float:
-        if self.get_elapsed_time():
-            return self.get_executions_started() / self.get_elapsed_time()
+        if self.get_executions_call_period():
+            return self.get_executions_started() / self.get_executions_call_period()
         return 0.0
 
     def get_statistics(self) -> dict:
         return {"start_time": self.get_start_timestamp(),
+                "max_requests": self.get_max_executions(),
                 "requests_started": self.get_executions_started(),
-                "elapsed_seconds": self.get_elapsed_time(),
+                "requests_completed:": self.get_executions_completed(),
+                "elapsed_seconds": self.get_elapsed_seconds(),
                 "rps": self.get_real_rps(),
                 "percentage_complete": self.get_percentage_complete(),
                 "success_ratio": self.get_success_ratio(),
+                "overall_success_ratio": self.get_success_ratio_overall(),
                 "ok": self.get_ok(),
                 "ko": self.get_ko()}
 
@@ -286,7 +330,7 @@ class ThreadRegulator:
         now = time()
         self.run_control["global_executions"] = 0
         self.run_control["global_start_time"] = now
-        self.run_control["global_end_time"] = now + self.get_max_duration() if self.get_max_duration() else None
+        self.run_control["global_end_time"] = now + self.get_defined_duration() if self.get_defined_duration() else None
         self.run_control["global_real_end_time"] = None
         self.run_control["ok"] = 0
         self.run_control["ko"] = 0
@@ -306,7 +350,7 @@ class ThreadRegulator:
         return self.run_control["block"]["next_run"]
 
     def _set_rc_block_next_run(self, when):
-        self.run_control["block"]["next_run"] = when + self.get_burst_ts()
+        self.run_control["block"]["next_run"] = when + self.get_defined_burst_ts()
 
     def _get_rc_block_requests_left(self) -> int:
         return self.run_control["block"]["requests_left"]
@@ -329,7 +373,7 @@ class ThreadRegulator:
     def _has_reached_the_end(self) -> bool:
         if not self.is_running():
             return True
-        if self.get_max_executions() and self.get_executions_started() >= self.get_max_executions():
+        if self.get_defined_executions() and self.get_executions_started() >= self.get_defined_executions():
             return True
         if self.get_defined_end_timestamp() and time() >= self.get_defined_end_timestamp():
             return True
@@ -351,10 +395,10 @@ class ThreadRegulator:
         if self._get_rc_block_end_time() > now:
             now = self._get_rc_block_end_time()
 
-        self.run_control["block"]["next_run"] = now + self.get_burst_ts()
-        self.run_control["block"]["ends_at"] = now + self.get_burst_duration()
-        self.run_control["block"]["busy_until"] = now + self.get_burst_busy()
-        self.run_control["block"]["requests_left"] = self.get_burst_requests()
+        self.run_control["block"]["next_run"] = now + self.get_defined_burst_ts()
+        self.run_control["block"]["ends_at"] = now + self.get_defined_burst_duration()
+        self.run_control["block"]["busy_until"] = now + self.get_defined_burst_busy()
+        self.run_control["block"]["requests_left"] = self.get_defined_burst_requests()
         self.run_control["block"]["id"] += 1
 
     def _sleep_until_end_of_block_and_init_new_one(self):
@@ -373,7 +417,7 @@ class ThreadRegulator:
         safe_sleep(block_end_time - time())
 
     def _wait_for_next_task(self):
-        next_run = self._get_rc_block_next_run()     # could be min(.., self.get_rc_global_end_time()) if defined
+        next_run = self._get_rc_block_next_run()
 
         # if next_run is after global_end_time definition, just end now
         if self.get_defined_end_timestamp() and next_run > self.get_defined_end_timestamp():
@@ -416,10 +460,10 @@ class ThreadRegulator:
         else:
             self.run_control["global_ko"] += 1
 
-    def _add_to_execution_log(self, start_time: float, end_time: float, success:bool, user: int, block_id: int, stat_lock: Lock):
+    def _add_to_execution_log(self, start_time: float, end_time: float, success:bool, request_result: object, user: int, block_id: int, stat_lock: Lock):
         stat_lock.acquire()
         self._inc_success_result(success)
-        self.execution_log.append((start_time, end_time, success, user, block_id, len(self._get_busy_workers())))
+        self.execution_log.append((start_time, end_time, success, user, block_id, len(self._get_busy_workers()), request_result))
         self._remove_worker_as_busy(user)
         total_finished = self.get_executions_completed()
         stat_lock.release()
@@ -440,7 +484,7 @@ class ThreadRegulator:
                 start_time = time()
                 safe_sleep(sleep_duration)
                 if self.is_running():
-                    self._notify_progress(f"elapsed={self.get_elapsed_time():.3f}")
+                    self._notify_progress(f"elapsed={self.get_elapsed_seconds():.3f}")
                     sleep_duration = 2*notify_interval - (time() - start_time) - 0.001
                 else:
                     break
@@ -452,13 +496,13 @@ class ThreadRegulator:
         try:
             func = self.notifier["method"]
             args = self.notifier["args"]
+            kwargs = self.notifier["kwargs"]
             stats = {"time": str(datetime.now()),
                      "users_busy": len(self._get_busy_workers()),
                      "cause": cause}
             stats.update(self.get_statistics())
-            func(*args, stats)
+            func(stats, *args, **kwargs)
         except Exception as e:
-            #print(e)
             pass
 
     # </editor-fold>
@@ -477,11 +521,13 @@ class ThreadRegulator:
             start_time = time()
 
             try:
-                success = True if func(*args, **kwargs) else False
-            except:
+                request_result = func(user, *args, **kwargs)
+                success = True if request_result else False
+            except Exception as e:
+                request_result = str(e)
                 success = False
 
-            self._add_to_execution_log(start_time, time(), success, user, block_id, stat_lock)
+            self._add_to_execution_log(start_time, time(), success, request_result, user, block_id, stat_lock)
 
     def start(self, run_method, *run_args, **run_kwargs):
         if self.is_running():
@@ -498,7 +544,7 @@ class ThreadRegulator:
         self._notify_by_time()
 
         # start threads
-        for user in range(1, self.get_users() + 1):
+        for user in range(1, self.get_defined_users() + 1):
             worker = Thread(target=self._worker_function, args=(user, run_lock, stat_lock))
             worker.start()
             self._add_worker(worker)
@@ -514,6 +560,8 @@ class ThreadRegulator:
         # record ending
         self.stop(gracefully=True)
 
+        return self
+
     def stop(self, gracefully=True):
         self.run_control["global_real_end_time"] = time()
         self.run_control["running"] = False
@@ -524,6 +572,8 @@ class ThreadRegulator:
                     worker.kill()
                 except:
                     pass
+
+        return self
 
     # </editor-fold>
 
