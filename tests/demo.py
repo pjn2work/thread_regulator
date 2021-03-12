@@ -1,21 +1,26 @@
-from thread_regulator import ThreadRegulator, safe_sleep
+from thread_regulator import ThreadRegulator, safe_sleep, create_regular, create_burst
 
 
 def demo_constant_rate():
     from random import choice
 
-    def my_notifier(arg1, stats_dict):
-        print(arg1, stats_dict)
+    def my_notifier(stats_dict, arg1, **kwargs):
+        print("NotifierMethod", arg1, kwargs, stats_dict)
 
-    def my_thread_call(*args, **kwargs):
+    def my_thread_call(user, *args, **kwargs):
+        print(f"ExecutionUser{user}", args, kwargs)
         safe_sleep(choice((0.1, 0.2, 0.3)))
         return True
 
-    tr = ThreadRegulator.create_regular(users=4, rps=10.0, duration_sec=1.0, executions=15)
+    tr = create_regular(users=4, rps=10.0, duration_sec=3.0, executions=0)
     print(tr)
     print("="*100)
-    tr.set_notifier(notify_method=my_notifier, every_sec=1, every_exec=8, notify_method_args=("notify_example_arg_1", )).\
-        start(my_thread_call, "arg1", "arg2", arg3="my_name", arg4="my_demo")
+    tr.set_notifier(notify_method=my_notifier,
+                    every_sec=1,
+                    every_exec=8,
+                    notify_method_args=("notify_arg_1", ),
+                    notify_kwarg_2="someting")
+    tr.start(my_thread_call, "arg1", "arg2", arg3="my_val_3", arg4="my_val_4")
 
     return tr
 
@@ -23,19 +28,24 @@ def demo_constant_rate():
 def demo_burst_mode():
     from random import choice
 
-    def my_notifier(arg1, stats_dict):
-        print(arg1, stats_dict)
+    def my_notifier(stats_dict, arg1, **kwargs):
+        print("NotifierMethod", arg1, kwargs, stats_dict)
 
-    def my_thread_call(*args, **kwargs):
+    def my_thread_call(user, *args, **kwargs):
+        #print(f"ExecutionUser{user}", args, kwargs)
         safe_sleep(choice((0.1, 0.2, 0.3)))
         return True
 
-    tr = ThreadRegulator.create_burst(users=4, rps=10.0, duration_sec=2.0, req=10, dt_sec=0.5, executions=20)
+    tr = create_burst(users=10, rps=40.0, duration_sec=2.0, req=10, dt_sec=0.2, executions=0)
     print(tr)
     print("="*100)
 
-    tr.set_notifier(notify_method=my_notifier, every_sec=1, every_exec=8, notify_method_args=("notify_example_arg_1", )). \
-        start(my_thread_call, "arg1", "arg2", arg3="my_name", arg4="my_demo")
+    tr.set_notifier(notify_method=my_notifier,
+                    every_sec=1,
+                    every_exec=20,
+                    notify_method_args=("notify_arg_1", ),
+                    notify_kwarg_2=True)
+    tr.start(my_thread_call, "arg1", "arg2", arg3="my_val_3", arg4="my_val_4")
 
     return tr
 
