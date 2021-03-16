@@ -1,5 +1,5 @@
 import setuptools
-
+from thread_regulator import __version__
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
@@ -7,7 +7,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="thread_regulator-pjn2work",
-    version="0.1.0",
+    version=__version__,
     author="Pedro Jorge Nunes",
     author_email="pjn2work@google.com",
     description="Thread Regulator with notifications and statistics",

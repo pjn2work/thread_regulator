@@ -5,6 +5,9 @@ from collections import Counter
 import pandas as pd
 
 
+__version__ = "0.1.0"
+
+
 def create_regular(users: int, rps: float, duration_sec: float, executions: int):
     return ThreadRegulator(users, rps, None, None, duration_sec, executions)
 
