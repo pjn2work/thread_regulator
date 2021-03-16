@@ -1,4 +1,5 @@
 from thread_regulator import ThreadRegulator, safe_sleep, create_regular, create_burst
+from thread_regulator.graphs import PerformanceGraphs
 
 
 def demo_constant_rate():
@@ -22,6 +23,11 @@ def demo_constant_rate():
                     notify_kwarg_2="someting")
     tr.start(my_thread_call, "arg1", "arg2", arg3="my_val_3", arg4="my_val_4")
 
+    pg = PerformanceGraphs()
+    pg.collect_data(tr)
+    pg.save_data("demo_regular_df")
+    pg.collect_data("demo_regular_df")
+
     return tr
 
 
@@ -36,7 +42,7 @@ def demo_burst_mode():
         safe_sleep(choice((0.1, 0.2, 0.3)))
         return True
 
-    tr = create_burst(users=10, rps=40.0, duration_sec=2.0, req=10, dt_sec=0.2, executions=0)
+    tr = create_burst(users=10, rps=20.0, duration_sec=2.0, req=10, dt_sec=0.2, executions=0)
     print(tr)
     print("="*100)
 
@@ -46,6 +52,11 @@ def demo_burst_mode():
                     notify_method_args=("notify_arg_1", ),
                     notify_kwarg_2=True)
     tr.start(my_thread_call, "arg1", "arg2", arg3="my_val_3", arg4="my_val_4")
+
+    pg = PerformanceGraphs()
+    pg.collect_data(tr)
+    pg.save_data("demo_burst_df")
+    pg.collect_data("demo_burst_df")
 
     return tr
 

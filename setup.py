@@ -7,7 +7,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="thread_regulator-pjn2work",
-    version="1.0.0",
+    version="0.1.0",
     author="Pedro Jorge Nunes",
     author_email="pjn2work@google.com",
     description="Thread Regulator with notifications and statistics",

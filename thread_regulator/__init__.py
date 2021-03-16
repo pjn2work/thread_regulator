@@ -1,8 +1,8 @@
 from threading import Thread, Lock
 from time import time, sleep
 from datetime import datetime
-from pandas import DataFrame
 from collections import Counter
+import pandas as pd
 
 
 def create_regular(users: int, rps: float, duration_sec: float, executions: int):
@@ -200,8 +200,8 @@ class ThreadRegulator:
     def get_execution_counter_of_responses(self) -> dict:
         return dict(Counter([row[-1] for row in self.execution_log]).items())
 
-    def get_execution_dataframe(self, index_on_end: bool = False, group_sec: int = None) -> DataFrame:
-        df = DataFrame(self.get_execution_list(), columns=("start_ts", "end_ts", "success", "user", "block", "users_busy", "request_result"))
+    def get_execution_dataframe(self, index_on_end: bool = False, group_sec: int = None) -> pd.DataFrame:
+        df = pd.DataFrame(self.get_execution_list(), columns=("start_ts", "end_ts", "success", "user", "block", "users_busy", "request_result"))
 
         # to set the executions to start on second x.000
         ms_diff = df.start_ts.min()
@@ -243,7 +243,7 @@ class ThreadRegulator:
 
         return df.sort_index()
 
-    def get_execution_blocks_dataframe(self) -> DataFrame:
+    def get_execution_blocks_dataframe(self) -> pd.DataFrame:
         df = self.get_execution_dataframe()
 
         # check for executions that went above the thread safe period
@@ -263,6 +263,10 @@ class ThreadRegulator:
         gdf["block_duration"] = gdf["block_duration"].apply(lambda s: str(s)[7:])
 
         return gdf
+
+    def get_statistics_dataframe(self) -> pd.DataFrame:
+        stat = {k: [v] for k, v in self.get_statistics().items()}
+        return pd.DataFrame.from_dict(stat, orient="columns")
 
     # </editor-fold>
 
@@ -319,13 +323,13 @@ class ThreadRegulator:
         return self.run_control["global_last_run_timestamp"]
 
     def get_executions_call_period(self):
-        return self.get_last_run_timestamp() - self.get_start_timestamp()
+        return self.get_last_run_timestamp() - self.get_start_timestamp() + self.get_defined_burst_ts()
 
     def get_real_rps(self) -> float:
         ep = self.get_executions_call_period()
-        es = self.get_executions_started() -1
+        es = self.get_executions_started()
         if ep and es > 0:
-            return round(es / ep, 3)
+            return round(es / ep, 2)
         return 1.0
 
     def get_statistics(self) -> dict:
@@ -335,7 +339,8 @@ class ThreadRegulator:
                 "end": datetime.fromtimestamp(self.get_real_end_timestamp()).strftime("%Y-%m-%d %H:%M:%S.%f"),
                 "max_requests": self.get_max_executions(),
                 "requests_started": self.get_executions_started(),
-                "requests_completed:": self.get_executions_completed(),
+                "requests_completed": self.get_executions_completed(),
+                "requests_missing": max(self.get_max_executions() - self.get_executions_completed(), 0),
                 "execution_seconds": self.get_executions_call_period(),
                 "elapsed_seconds": self.get_elapsed_seconds(),
                 "rps": self.get_real_rps(),
@@ -344,7 +349,9 @@ class ThreadRegulator:
                 "overall_success_ratio": self.get_success_ratio_overall(),
                 "ok": self.get_ok(),
                 "ko": self.get_ko(),
-                "block": self._get_block_id()}
+                "block": self._get_block_id(),
+                "ts": self.get_defined_burst_ts(),
+                "safe_ts": self.get_user_threadsafe_period()}
 
     def _get_thread_method(self):
         return self.run_control["method"]
