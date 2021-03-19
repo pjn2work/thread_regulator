@@ -4,11 +4,10 @@ Python class that allows to control thread execution in time (requests per secon
 
 ```python
 from thread_regulator import ThreadRegulator, safe_sleep, create_regular, create_burst
+from random import choice
 
 
 def demo_constant_rate():
-    from random import choice
-
     def my_notifier(stats_dict, arg1, **kwargs):
         print(arg1, stats_dict)
 
@@ -26,8 +25,6 @@ def demo_constant_rate():
 
 
 def demo_burst_mode():
-    from random import choice
-
     def my_notifier(arg1, stats_dict):
         print(arg1, stats_dict)
 

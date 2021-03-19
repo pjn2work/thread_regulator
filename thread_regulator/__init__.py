@@ -1,11 +1,19 @@
 from threading import Thread, Lock
 from time import time, sleep
-from datetime import datetime
+from datetime import datetime, timedelta
 from collections import Counter
+from math import ceil
 import pandas as pd
 
 
 __version__ = "0.1.0"
+
+
+def frange(start, stop, step, precision=7):
+    i = start
+    while i < stop:
+        yield i
+        i = round(i + step, precision)
 
 
 def create_regular(users: int, rps: float, duration_sec: float, executions: int):
@@ -27,7 +35,7 @@ class ThreadRegulator:
                           "mode": None}
 
         # validate users and rps
-        assert 1 <= users <= 512, "'users' must be between 1..512"
+        assert 1 <= users <= 256, "'users' must be between 1..256"
         assert rps and rps > 0.0, "'rps' must be > 0.0"
 
         # run deadline, either from number of executions or time, or both: whatever finishes first
@@ -49,8 +57,8 @@ class ThreadRegulator:
                 req = executions
                 dt_sec = executions / rps
             else:
-                req = int(rps * duration_sec)
-                dt_sec = duration_sec
+                req = ceil(rps * duration_sec)
+                dt_sec = req / rps
         else:
             assert req, f"For burst mode you need to specify 'req' and 'dt_sec', you're missing 'req'. For regular mode, both must be equal to None"
             assert dt_sec, f"For burst mode you need to specify 'req' and 'dt_sec', you're missing 'dt_sec'. For regular mode, both must be equal to None"
@@ -123,7 +131,6 @@ class ThreadRegulator:
             return int(min(total_executions, self.get_defined_executions()))
 
         return total_executions
-
     # <editor-fold desc=" -= class common methods =- ">
 
     def set_notifier(self, notify_method=print, every_sec=5, every_exec=0, notify_method_args=tuple(), **notify_method_kwargs):
@@ -271,6 +278,28 @@ class ThreadRegulator:
         stat = {k: [v] for k, v in self.get_statistics().items()}
         return pd.DataFrame.from_dict(stat, orient="columns")
 
+    def get_theoretical_model_dataframe(self):
+        if self.is_mode_regular():
+            time_window = min(1.0, self.get_defined_burst_duration()) + self.get_defined_burst_ts()
+        else:
+            time_window = max(1.0, self.get_defined_burst_duration()) + self.get_defined_burst_ts()
+
+        # build the execution timeline
+        df = pd.DataFrame(columns=["user"])
+        user = 0
+        for t_sec in frange(0.0, time_window, self.get_defined_burst_ts(), precision=6):
+            ts = round(t_sec % self.get_defined_burst_duration(), 6)
+
+            if ts < self.get_defined_burst_busy():
+                ruser = user + 1
+                user = (user + 1) % self.get_defined_users()
+            else:
+                ruser = 0
+
+            df.loc[t_sec] = ruser
+
+        return df
+
     # </editor-fold>
 
     # <editor-fold desc=" -= control plane =- ">
@@ -280,7 +309,7 @@ class ThreadRegulator:
 
     def get_percentage_complete(self) -> float:
         tot_exec = round(100 * self.get_executions_started() / self.get_defined_executions(), 2) if self.get_defined_executions() else 0.0
-        tot_time = round(min(self.get_elapsed_seconds() / self.get_defined_duration(), 1.0) * 100, 2) if self.get_defined_duration() else 0.0
+        tot_time = round(100 * min(self.get_elapsed_seconds() / self.get_defined_duration(), 1.0), 2) if self.get_defined_duration() else 0.0
         return max(tot_exec, tot_time)
 
     def get_executions_started(self) -> int:
