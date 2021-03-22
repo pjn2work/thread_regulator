@@ -230,6 +230,10 @@ class ThreadRegulator:
         df["start"] = df["start_ts"].apply(lambda x: datetime.fromtimestamp(x -ms_diff))
         df["end"] = df["end_ts"].apply(lambda x: datetime.fromtimestamp(x -ms_diff))
 
+        # add request sequential order number of execution
+        df = df.set_index("start_ts").sort_index().reset_index()
+        df["request_number"] = df.index + 1
+
         # set index on start or end
         if index_on_end:
             df.set_index("end", inplace=True)
@@ -246,9 +250,8 @@ class ThreadRegulator:
         # convert to an average df by grouping results in seconds
         if group_sec:
             include_fields = {"start": "min", "end": "max"}
-            filter_columns = ["success", "failure", "executions", "duration", "users_busy", "thread_safe_period", "block", "ts", "safe_ts", include_field]
-            filter_agg = {"success": "sum", "failure": "sum", "executions": "sum", "duration": "median", "users_busy": "max", "thread_safe_period": "max", "block": "median", "ts": "max", "safe_ts": "max", include_field: include_fields[include_field]}
-            df = df[filter_columns].resample(f"{group_sec}s").agg(filter_agg)
+            filter_agg = {"success": "sum", "failure": "sum", "executions": "sum", "duration": "median", "users_busy": "max", "request_number": "min", "thread_safe_period": "max", "block": "median", "ts": "max", "safe_ts": "max", include_field: include_fields[include_field]}
+            df = df[filter_agg.keys()].resample(f"{group_sec}s").agg(filter_agg)
             df.rename(columns={"duration": "duration_med"}, inplace = True)
 
         return df.sort_index()
@@ -257,12 +260,12 @@ class ThreadRegulator:
         df = self.get_execution_dataframe()
 
         # check for executions that went above the thread safe period
-        df["is_above_ts"] = df["thread_safe_period"] > 0.0
-        df["is_above_ts"] = df["is_above_ts"].astype(int)
+        df["above_safe_ts"] = df["thread_safe_period"] > 0.0
+        df["above_safe_ts"] = df["above_safe_ts"].astype(int)
 
         # column selection, grouping by block number
-        filter_columns = ["block", "start", "end", "success", "failure", "executions", "duration", "is_above_ts", "users_busy"]
-        filter_agg = {"start": "min", "end": "max", "success": "sum", "failure": "sum", "executions": "sum", "duration": "median", "is_above_ts": "sum", "users_busy": "max"}
+        filter_agg = {"start": "min", "end": "max", "success": "sum", "failure": "sum", "executions": "sum", "duration": "median", "above_safe_ts": "sum", "users_busy": "max", "request_number": "min"}
+        filter_columns = ["block"] + list(filter_agg.keys())
         gdf = df.reset_index()[filter_columns]
         gdf = gdf.groupby("block").agg(filter_agg)
         gdf.rename(columns={"duration": "duration_med"}, inplace = True)

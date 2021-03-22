@@ -24,15 +24,21 @@ pg = PerformanceGraphs()
 
 
 pg.collect_data("../tests/demo_burst_df.xls")
-data = pg._dataframes["sdf"]
+data_mut = pg._dataframes["sdf"].reset_index()
+data_mut["success"] = data_mut["success"].astype(bool)
+data_mut["failure"] = data_mut["failure"].astype(bool)
 
 
-cols = ["end", "duration", "executions", "success", "failure", "request_result", "user", "users_busy", "block"]
+cols = ["start", "end", "request_number", "duration", "executions", "success", "failure", "request_result", "user", "users_busy", "block"]
 dropdown_options = [{'label': col, 'value': col} for col in cols]
 
 start_duration_analisys = html.Div(children=[
     html.H1('Start time / Duration analysis'),
-    dcc.Dropdown(id='dropdown_sdf', options=dropdown_options, value='end'),
+
+    html.Div([dbc.Row([
+        dbc.Col([dcc.Dropdown(id='dropdown_y', options=dropdown_options, value='end')]),
+        dbc.Col([dcc.Dropdown(id='dropdown_x', options=dropdown_options, value='start')])
+        ])]),
     html.Br(),
     dcc.Graph(id='graph_sdf'),
     html.Br(),
@@ -64,7 +70,9 @@ block_analysis = html.Div(children=[
     html.Br(),
     dcc.Graph(id="g52", figure=pg.get_plot_block_jitter()),
     html.Br(),
-    dcc.Graph(id="g53", figure=pg.get_plot_block_duration())
+    dcc.Graph(id="g53", figure=pg.get_plot_block_duration()),
+    html.Br(),
+    dcc.Graph(id="g54", figure=pg.get_plot_block_scatter())
 ])
 
 
@@ -120,14 +128,15 @@ intro = html.Div([
 app.layout = dcc.Tabs(children=[
     dcc.Tab(children=[intro], label='Intro'),
     dcc.Tab(children=[start_duration_analisys], label="Durations"),
-    dcc.Tab(children=[status_analysis], label="Status"),
+    dcc.Tab(children=[status_analysis], label="Resample"),
     dcc.Tab(children=[block_analysis], label="Block")
 ])
 
 
-@app.callback(Output('graph_sdf', 'figure'), [Input('dropdown_sdf', 'value')])
-def update_graph_sdf(prop):
-    return px.line(data, y=prop, title=f"{prop} VS start time", labels={"start", "Start time"})
+@app.callback(Output('graph_sdf', 'figure'), [Input('dropdown_y', 'value'), Input('dropdown_x', 'value')])
+def update_graph_sdf(prop_y, prop_x):
+    fig = px.scatter(data_mut, x=prop_x, y=prop_y, size="duration", color="success", color_discrete_sequence=["#53f677", "#f16940"])
+    return fig.update_traces(mode='lines+markers').update_layout(title=f"{prop_y} VS {prop_x}")
 
 
 if __name__ == '__main__':

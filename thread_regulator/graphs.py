@@ -22,9 +22,10 @@ class PerformanceGraphs:
 
     def __init__(self):
         # Dataframes
-        self._dataframes = {"tr_settings": pd.DataFrame(), "df_stat": pd.DataFrame(), "df_pt": pd.DataFrame(), "df_tm": pd.DataFrame(),
+        self._dataframes = {"tr_settings": pd.DataFrame(), "df_stat": pd.DataFrame(), "df_pt": pd.DataFrame(),
                             "sdf": pd.DataFrame(), "edf": pd.DataFrame(), "bdf": pd.DataFrame(),
-                            "srs": pd.DataFrame(), "ers": pd.DataFrame(), "df_diff": pd.DataFrame()}
+                            "srs": pd.DataFrame(), "ers": pd.DataFrame(), "df_diff": pd.DataFrame(),
+                            "df_tm": pd.DataFrame()}
 
     # <editor-fold desc=" -= Save or Collect data =- ">
     def save_data(self, filename: str = None):
@@ -91,7 +92,7 @@ class PerformanceGraphs:
 
         # Dataframe with the differences between each row
         self._dataframes["df_diff"] = df_diff = sdf.reset_index()
-        cols = [col for col in df_diff.columns if col not in ["request_result"]]
+        cols = ["start_ts", "end_ts", "duration", "thread_safe_period"]
         self._dataframes["df_diff"] = df_diff[cols].diff().iloc[1:]
 
         # Dataframe describing columns by percentiles
@@ -225,7 +226,9 @@ class PerformanceGraphs:
             return None
         d2p = self._dataframes["df_tm"]
 
-        return px.bar(d2p, title=title, **kwargs).update_layout(xaxis_title="Start time (sec)", yaxis_title="User")
+        fig = px.bar(d2p, title=title, log_y=True, **kwargs)
+
+        return fig.update_layout(xaxis_title="Start time (sec)", yaxis_title="User")
 
     def get_plot_duration_of_each_call(self, title="Duration of each request (in sec)", **kwargs):
         if self._dataframes["sdf"].empty:
@@ -241,8 +244,7 @@ class PerformanceGraphs:
 
         fig = go.Figure()
 
-        for dfilter in ['executions', 'success', 'failure']:
-            title = f"{dfilter} duration frequency".capitalize()
+        for dfilter in ['executions', 'failure', 'success']:
             row_filter = self._dataframes["sdf"][dfilter] == 1
             d2p = self._dataframes["sdf"][row_filter].duration
             if d2p.empty:
@@ -256,7 +258,7 @@ class PerformanceGraphs:
         if self._dataframes["sdf"].empty:
             return None
 
-        d2p = self._dataframes["sdf"]["duration"].sort_values().reset_index(drop=True)
+        d2p = self._dataframes["sdf"].duration.sort_values().reset_index(drop=True)
 
         return px.line(d2p, title=title, **kwargs).update_layout(xaxis_title="Requests", yaxis_title="Seconds")
 
@@ -312,7 +314,9 @@ class PerformanceGraphs:
         d2p = df[cols]
         resample_period = self._dataframes["df_stat"]["agg_sec"].max()
 
-        return px.line(d2p, title=title.format(resample_period), **kwargs).update_layout(xaxis_title=xtitle, yaxis_title="# Requests")
+        fig = px.line(d2p, title=title.format(resample_period), **kwargs)
+
+        return fig.update_layout(xaxis_title=xtitle, yaxis_title="# Requests")
 
     def get_plot_resample_executions_start(self, title="Requests Started / {} sec", **kwargs):
         return self._get_plot_resample_executions(self._dataframes["srs"], title=title, xtitle="Start time", **kwargs)
@@ -368,7 +372,7 @@ class PerformanceGraphs:
         if self._dataframes["bdf"].empty:
             return None
 
-        cols = ["executions", "failure", "success", "is_above_ts", "users_busy"]
+        cols = ["executions", "failure", "success", "users_busy", "above_safe_ts"]
         d2p = self._dataframes["bdf"][cols]
 
         return px.line(d2p, title=title, **kwargs).update_layout(xaxis_title="# Block", yaxis_title="Sum()")
@@ -376,5 +380,7 @@ class PerformanceGraphs:
     def get_plot_block_scatter(self, title="Block success/duration/users_busy", **kwargs):
         d2p = self._dataframes["bdf"]
 
-        return px.scatter(d2p, x="start", y="success", size="block_duration_sec", color="users_busy", log_x=False, title=title, **kwargs)
+        fig = px.scatter(d2p, x="start", y="success", size="block_duration_sec", color="users_busy", title=title, **kwargs)
+
+        return fig.update_traces(mode='lines+markers')
     # </editor-fold>
