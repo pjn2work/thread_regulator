@@ -1,8 +1,9 @@
 from os import path
+from io import BytesIO
 from thread_regulator import ThreadRegulator, pd
+import dash_table
 import plotly.express as px
 import plotly.graph_objects as go
-import dash_bootstrap_components as dbc
 
 
 # https://www.w3.org/TR/css-color-3/#svg-color
@@ -42,12 +43,15 @@ class PerformanceGraphs:
 
         return self
 
-    def collect_data(self, from_tr_or_file):
-        if isinstance(from_tr_or_file, ThreadRegulator):
-            return self._collect_data_from_threadregulator(from_tr_or_file)
-        if isinstance(from_tr_or_file, str):
-            return self._collect_data_from_files(from_tr_or_file)
-        raise Exception(f"Must pass a ThreadRegulator or a filename to where the dataframes were stored")
+    def collect_data(self, from_tr_or_file_or_bytes: (ThreadRegulator, str, BytesIO)):
+        if isinstance(from_tr_or_file_or_bytes, ThreadRegulator):
+            return self._collect_data_from_threadregulator(from_tr_or_file_or_bytes)
+        if isinstance(from_tr_or_file_or_bytes, str):
+            return self._collect_data_from_files(from_tr_or_file_or_bytes)
+        if isinstance(from_tr_or_file_or_bytes, BytesIO):
+            return self._collect_data_from_bytes(from_tr_or_file_or_bytes)
+
+        raise Exception(f"Must pass a ThreadRegulator, or a filename to where the dataframes were stored, or the Excel bytes")
 
     def _collect_data_from_files(self, filename: str):
         if not filename.endswith(".xlsx") and not filename.endswith(".xls"):
@@ -56,6 +60,12 @@ class PerformanceGraphs:
 
         for df_name in self._dataframes:
             self._dataframes[df_name] = pd.read_excel(filename, header=0, index_col=0, sheet_name=df_name)
+
+        return self
+
+    def _collect_data_from_bytes(self, data: BytesIO):
+        for df_name in self._dataframes:
+            self._dataframes[df_name] = pd.read_excel(data, header=0, index_col=0, sheet_name=df_name)
 
         return self
 
@@ -116,8 +126,10 @@ class PerformanceGraphs:
 
     # <editor-fold desc=" -= Gauges =- ">
     def get_gauge_users(self, **kwargs):
+        fig = go.Figure()
+
         if self._dataframes["df_stat"].empty or self._dataframes["tr_settings"].empty or self._dataframes["df_pt"].empty:
-            return None
+            return fig
 
         real_rps = self._gf_statistics("rps")
         defined_rps = self._gf_settings("rps")
@@ -127,8 +139,6 @@ class PerformanceGraphs:
         total_users = self._gf_settings("users")
         users_busy = self._gf_percentiles("max", "users_busy")
         median_users_busy = round(self._gf_percentiles("50%", "users_busy"), 1)
-
-        fig = go.Figure()
 
         fig.add_trace(go.Indicator(mode="gauge+number+delta", value=real_rps, title="RPS", domain={"row": 0, "column": 0},
                                    delta={'reference': defined_rps},
@@ -143,10 +153,10 @@ class PerformanceGraphs:
         return fig.update_layout(grid={'rows': 1, 'columns': 3, 'pattern': "independent"}, **kwargs)
 
     def get_gauge_duration(self, **kwargs):
-        if self._dataframes["sdf"].empty:
-            return None
-
         fig = go.Figure()
+
+        if self._dataframes["sdf"].empty:
+            return fig
 
         for col, dfilter in enumerate(['executions', 'success', 'failure']):
             row_filter = self._dataframes["sdf"][dfilter] == 1
@@ -187,8 +197,10 @@ class PerformanceGraphs:
         return fig.update_layout(grid={'rows': 1, 'columns': 3, 'pattern': "independent"}, **kwargs)
 
     def get_indicators_requests(self):
+        fig = go.Figure()
+
         if self._dataframes["df_stat"].empty:
-            return None
+            return fig
 
         success_ratio = round(float(self._gf_statistics("success_ratio")) * 100, 2)
         overall_success_ratio = round(float(self._gf_statistics("overall_success_ratio")) * 100, 2)
@@ -199,8 +211,6 @@ class PerformanceGraphs:
         missed = self._gf_statistics("requests_missing")
         success = self._gf_statistics("ok")
         failure = self._gf_statistics("ko")
-
-        fig = go.Figure()
 
         fig.add_trace(go.Indicator(mode="gauge+number+delta", value=completed, title={'text': "Completed requests"}, domain={"row": 0, "column": 0},
                                    delta={'reference': started},
@@ -223,7 +233,8 @@ class PerformanceGraphs:
     # <editor-fold desc=" -= Duration, based on start_time =- ">
     def get_plot_theoretical_model(self, title="Theoretical Model", **kwargs):
         if self._dataframes["df_tm"].empty:
-            return None
+            return go.Figure()
+
         d2p = self._dataframes["df_tm"]
 
         fig = px.bar(d2p, title=title, log_y=True, **kwargs)
@@ -232,17 +243,18 @@ class PerformanceGraphs:
 
     def get_plot_duration_of_each_call(self, title="Duration of each request (in sec)", **kwargs):
         if self._dataframes["sdf"].empty:
-            return None
+            return go.Figure()
+
         cols = ["ts", "safe_ts", "duration"]
         d2p = self._dataframes["sdf"][cols]
 
         return px.line(d2p, title=title, **kwargs).update_layout(xaxis_title="Start time", yaxis_title="Duration (in sec)")
 
     def get_plot_duration_histogram(self, bins=10, **kwargs):
-        if self._dataframes["sdf"].empty:
-            return None
-
         fig = go.Figure()
+
+        if self._dataframes["sdf"].empty:
+            return fig
 
         for dfilter in ['executions', 'failure', 'success']:
             row_filter = self._dataframes["sdf"][dfilter] == 1
@@ -256,7 +268,7 @@ class PerformanceGraphs:
 
     def get_plot_duration_percentils(self, title="Requests duration", **kwargs):
         if self._dataframes["sdf"].empty:
-            return None
+            return go.Figure()
 
         d2p = self._dataframes["sdf"].duration.sort_values().reset_index(drop=True)
 
@@ -269,7 +281,7 @@ class PerformanceGraphs:
     # <editor-fold desc=" -= Start_time vs End_time, Jitter =- ">
     def get_plot_endtime_based_on_starttime(self, title="End time based on start time", **kwargs):
         if self._dataframes["sdf"].empty:
-            return None
+            return go.Figure()
 
         d2p = self._dataframes["sdf"]["end"]
 
@@ -277,7 +289,8 @@ class PerformanceGraphs:
 
     def get_plot_endtime_vs_starttime(self, title="Start time vs End time", **kwargs):
         if self._dataframes["sdf"].empty:
-            return None
+            return go.Figure()
+
         cols = ["start_ts", "end_ts"]
         df = self._dataframes["sdf"].reset_index()
         min_start = min(df[cols[0]])
@@ -289,7 +302,8 @@ class PerformanceGraphs:
 
     def get_plot_execution_jitter(self, show_ts=False, show_safe_ts=False, title="Start time jitter", **kwargs):
         if self._dataframes["df_diff"].empty:
-            return None
+            return go.Figure()
+
         cols = ["start_ts"]
         d2p = self._dataframes["df_diff"].reset_index()[cols]
         if show_ts:
@@ -309,7 +323,8 @@ class PerformanceGraphs:
     # <editor-fold desc=" -= Resample in y sec | executions/success/failure/users_busy =- ">
     def _get_plot_resample_executions(self, df, title="", xtitle="", **kwargs):
         if len(df) < 2:
-            return None
+            return go.Figure()
+
         cols = ["executions", "failure", "success", "users_busy"]
         d2p = df[cols]
         resample_period = self._dataframes["df_stat"]["agg_sec"].max()
@@ -326,7 +341,7 @@ class PerformanceGraphs:
 
     def get_plot_pie_success_fail_missing(self, title="Requests", hole=.5, **kwargs):
         if self._dataframes["df_stat"].empty:
-            return None
+            return go.Figure()
 
         colors = {"ok": "lightgreen", "ko": "red", "requests_missing": "gray"}
         d2p = self._dataframes["df_stat"][colors.keys()]
@@ -344,7 +359,7 @@ class PerformanceGraphs:
 
     def get_plot_block_starttime(self, title="Block start time", **kwargs):
         if self._dataframes["bdf"].empty:
-            return None
+            return go.Figure()
 
         d2p = self._dataframes["bdf"]["start"]
 
@@ -352,17 +367,17 @@ class PerformanceGraphs:
 
     def get_plot_block_jitter(self, title="Block start time Jitter", **kwargs):
         if len(self._dataframes["bdf"]) < 2:
-            return None
+            return go.Figure()
 
         d2p = self._dataframes["bdf"]["start"].diff().iloc[1:].dt.total_seconds()
         if d2p.empty:
-            return None
+            return go.Figure()
 
         return px.line(d2p, title=title, **kwargs).update_layout(xaxis_title="# Block", yaxis_title="Seconds")
 
     def get_plot_block_duration(self, title="Blocks duration", **kwargs):
         if self._dataframes["bdf"].empty:
-            return None
+            return go.Figure()
 
         d2p = self._dataframes["bdf"]["block_duration_sec"]
 
@@ -370,7 +385,7 @@ class PerformanceGraphs:
 
     def get_plot_block_executions(self, title="Executions per block", **kwargs):
         if self._dataframes["bdf"].empty:
-            return None
+            return go.Figure()
 
         cols = ["executions", "failure", "success", "users_busy", "above_safe_ts"]
         d2p = self._dataframes["bdf"][cols]
@@ -383,4 +398,41 @@ class PerformanceGraphs:
         fig = px.scatter(d2p, x="start", y="success", size="block_duration_sec", color="users_busy", title=title, **kwargs)
 
         return fig.update_traces(mode='lines+markers')
+    # </editor-fold>
+
+    # <editor-fold desc=" -= DataTables =- ">
+    def get_datatable_statistics(self):
+        df_stat = self._dataframes["df_stat"]
+        if df_stat.empty:
+            return dash_table.DataTable()
+
+        df_stat = df_stat[[col for col in df_stat.columns if col not in ["start_time", "end_time"]]]
+        df_stat = df_stat.T.reset_index().rename({"index": "Statistics", 0: "values"}, axis=1)
+
+        return dash_table.DataTable(
+            data=df_stat.to_dict("records"),
+            columns=[{"id": c, "name": c, "editable": False} for c in df_stat.columns],
+            style_header={"fontWeight": "bold"},
+            style_data_conditional=[{"if": {"column_id": "Statistics"}, "fontWeight": "bold"}]
+        )
+
+    def get_datatable_settings(self):
+        df_settings = self._dataframes["tr_settings"]
+        if df_settings.empty:
+            return dash_table.DataTable()
+
+        df_settings = df_settings.T.reset_index().rename({"index": "Setup", 0: "values"}, axis=1)
+
+        return dash_table.DataTable(
+            data=df_settings.to_dict("records"),
+            columns=[{"id": c, "name": c, "editable": False} for c in df_settings.columns],
+            style_header={"fontWeight": "bold"},
+            style_data_conditional=[{"if": {"column_id": "Setup"}, "fontWeight": "bold"}]
+        )
+
+    def get_data_mut(self):
+        data_mut = self._dataframes["sdf"].reset_index()
+        data_mut["success"] = data_mut["success"].astype(bool)
+        data_mut["failure"] = data_mut["failure"].astype(bool)
+        return data_mut
     # </editor-fold>
