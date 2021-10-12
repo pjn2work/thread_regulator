@@ -3,7 +3,7 @@ import dash_bootstrap_components as dbc
 
 import plotly.io as pio
 
-from .performance_graphs import PerformanceGraphs
+from thread_regulator.graphs.performance_graphs import PerformanceGraphs
 
 
 COLOR_SCHEMES = {
