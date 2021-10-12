@@ -1,9 +1,11 @@
 from os import path
 from io import BytesIO
-from thread_regulator import ThreadRegulator, pd
-import dash_table
+
+from dash import dash_table
 import plotly.express as px
 import plotly.graph_objects as go
+
+from thread_regulator import ThreadRegulator, pd
 
 
 # https://www.w3.org/TR/css-color-3/#svg-color

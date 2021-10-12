@@ -2,12 +2,12 @@ from base64 import b64decode
 from datetime import datetime
 from io import BytesIO
 
+from dash import dcc
+from dash import html
+from dash.dependencies import Input, Output, State
+
 from thread_regulator.graphs import app, pg
 import thread_regulator.graphs.tabbed_dashboard as tb_dash
-
-from dash.dependencies import Input, Output, State
-import dash_core_components as dcc
-import dash_html_components as html
 
 
 upload_area = dcc.Upload(
