@@ -59,6 +59,3 @@ if __name__ == "__main__":
     print("\n\nBurstMode")
     show_statistics(demo_burst_mode())
 ```
-
-WIP:
-Graph module for Dash reports
