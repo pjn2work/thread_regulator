@@ -438,3 +438,8 @@ class PerformanceGraphs:
         data_mut["failure"] = data_mut["failure"].astype(bool)
         return data_mut
     # </editor-fold>
+
+    def get_df(self, df_name: str) -> pd.DataFrame:
+        if df_name not in self._dataframes:
+            raise ValueError(f"No dataframe called '{df_name}', only have {list(self._dataframes.keys())}")
+        return self._dataframes[df_name]
