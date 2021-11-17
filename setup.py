@@ -10,8 +10,8 @@ install_requires = [
     "pandas>=1.0.1",
     "xlsxwriter>=1.2.9",
     "openpyxl>=3.0.4",
-    "dash>=1.14.0",
-    "dash-bootstrap-components>=0.10.1"
+    "dash>=2.0.0",
+    "dash-bootstrap-components>=1.0.0"
 ]
 
 

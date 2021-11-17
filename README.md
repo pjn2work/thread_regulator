@@ -2,8 +2,10 @@
 Python class that allows to control thread execution in time (requests per second) for both constant rate mode, or burst mode. With a notify option that is called after a specific number of executions or a time delta
 
 
+### Sample code
 ```python
 from thread_regulator import ThreadRegulator, safe_sleep, create_regular, create_burst
+from thread_regulator.graphs import PerformanceGraphs
 from random import choice
 
 
@@ -51,11 +53,33 @@ def show_statistics(tr):
     print("How many successes over how many requests executed:", tr.get_success_ratio())
     print("How many successes over how many requests should be executed:", tr.get_success_ratio_overall())
 
+    
+def save_results(tr, filename):
+    pg = PerformanceGraphs()
+    # this will save the results on an Excel file (that can be used to plot graphs as explained on last bullet)
+    pg.collect_data(tr).save_data(filename)
+    
 
 if __name__ == "__main__":
     print("RegularMode")
     show_statistics(demo_constant_rate())
 
     print("\n\nBurstMode")
-    show_statistics(demo_burst_mode())
+    tr = demo_burst_mode()
+    show_statistics(tr)
+
+    save_results(tr, "burst_mode_results.xls")
 ```
+
+
+### To see the graphical results:
+* Run `python -m thread_regulator`
+* Open the browser http://127.0.0.1:8050/
+* Drag/drop to the browser the .xls file (saved before)
+
+
+![Counters](https://github.com/pjn2work/thread_regulator/tree/master/sample_images/1intro.jpg "Counters graphs")
+
+![Durations](https://github.com/pjn2work/thread_regulator/tree/master/sample_images/2durations.jpg "Durations graphs")
+
+![Resample](https://github.com/pjn2work/thread_regulator/tree/master/sample_images/3resample.jpg "Resample graphs")

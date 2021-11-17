@@ -7,7 +7,7 @@ from math import ceil
 import pandas as pd
 
 
-__version__ = "0.2.4"
+__version__ = "0.2.5"
 
 
 def frange(start, stop, step, precision=7):
