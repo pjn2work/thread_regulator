@@ -21,7 +21,7 @@ def get_tab_intro():
             dbc.Col([html.Div([pg.get_datatable_statistics()])]),
             dbc.Col([html.Div([pg.get_datatable_settings()])]),
             dbc.Col([html.Div([dcc.Graph(id="g9", figure=pg.get_plot_pie_success_fail_missing())])])
-        ], no_gutters=False)]),
+        ], className="g-0")]),
     
         html.Br(),    
         dcc.Graph(id="gi03", figure=pg.get_gauge_duration()),
