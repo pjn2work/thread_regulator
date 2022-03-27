@@ -1,3 +1,4 @@
+from typing import Union
 from os import path
 from io import BytesIO
 
@@ -45,7 +46,7 @@ class PerformanceGraphs:
 
         return self
 
-    def collect_data(self, from_tr_or_file_or_bytes: (ThreadRegulator, str, BytesIO)):
+    def collect_data(self, from_tr_or_file_or_bytes: Union[ThreadRegulator, str, BytesIO]):
         if isinstance(from_tr_or_file_or_bytes, ThreadRegulator):
             return self._collect_data_from_threadregulator(from_tr_or_file_or_bytes)
         if isinstance(from_tr_or_file_or_bytes, str):
