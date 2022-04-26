@@ -543,6 +543,10 @@ class ThreadRegulator:
         # call notifier if total_finished reached the notification period
         self._notify_by_exec(total_finished)
 
+    # </editor-fold>
+
+    # <editor-fold desc=" -= Notification methods =- ">
+
     def _notify_by_exec(self, total_finished):
         if self._notifier.every_exec and self._notifier.method:
             if total_finished % self._notifier.every_exec == 0:
@@ -618,7 +622,7 @@ class ThreadRegulator:
         self._notify_by_time()
 
         # start threads
-        for user in range(1, self.get_defined_users() + 1):
+        for user in range(self.get_defined_users(), start=1):
             worker = Thread(target=self._worker_function, args=(user, run_lock, stat_lock))
             worker.start()
             self._add_worker(worker)
