@@ -54,7 +54,7 @@ class PerformanceGraphs:
         if isinstance(from_tr_or_file_or_bytes, BytesIO):
             return self._collect_data_from_bytes(from_tr_or_file_or_bytes)
 
-        raise Exception(f"Must pass a ThreadRegulator, or a filename to where the dataframes were stored, or the Excel bytes")
+        raise ValueError(f"Must pass a ThreadRegulator, or a filename to where the dataframes were stored, or the Excel bytes")
 
     def _collect_data_from_files(self, filename: str):
         if not filename.endswith(".xlsx") and not filename.endswith(".xls"):
@@ -112,7 +112,7 @@ class PerformanceGraphs:
         self._dataframes["df_pt"] = sdf[["success", "failure", "users_busy", "duration", "thread_safe_period"]].describe(percentiles=PerformanceGraphs.percentiles)
 
         # Dataframe with the overall statistics
-        self._dataframes["df_stat"] = tr.get_statistics_dataframe()
+        self._dataframes["df_stat"] = tr.get_statistics_as_dataframe()
         self._dataframes["df_stat"]["agg_sec"] = agg_sec
 
         return self

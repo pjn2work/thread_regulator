@@ -73,12 +73,30 @@ class _RunParameters:
     max_executions: int = 0
 
 
-@dataclass(init=False, repr=True, frozen=False)
+@dataclass(init=True, repr=True, frozen=False)
+class ThreadRegulatorStatistics:
+    start_time: float = 0.0
+    end_time: float = 0.0
+    start: str = ""
+    end: str = ""
+    max_requests: int = 0
+    requests_started: int = 0
+    requests_completed: int = 0
+    requests_missing: int = 0
+    execution_seconds: int = 0
+    elapsed_seconds: int = 0
+    rps: float = 0.0
+    percentage_complete: float = 0.0
+    success_ratio: float = 0.0
+    overall_success_ratio: float = 0.0
+    ok: int = 0
+    ko: int = 0
+    block: int = 0
+    ts: float = 0.0
+    safe_ts: float = 0.0
+
+
 class ThreadRegulator:
-    run_parameters: _RunParameters
-    execution_log: list = field(init=True, repr=False, default_factory=list)
-    _run_control: _RunControl = field(repr=False, default_factory=_RunControl)
-    _notifier: _Notifier = field(repr=False, default_factory=_Notifier)
 
     def __init__(self, users: int, rps: float, req: int, dt_sec: float, duration_sec: float, executions: int):
         # validate users and rps
@@ -143,6 +161,9 @@ class ThreadRegulator:
 
         # to call upon evey Y sec to notify progress
         self._notifier = _Notifier()
+
+        # initialise statistics, for the notifier
+        self._statistics = ThreadRegulatorStatistics()
 
         # execution list with all entrys of:
         #    (time_request_started, time_request_ended, request_success, user_id, block_id, request_result)
@@ -324,8 +345,8 @@ class ThreadRegulator:
 
         return gdf
 
-    def get_statistics_dataframe(self) -> pd.DataFrame:
-        stat = {k: [v] for k, v in self.get_statistics().items()}
+    def get_statistics_as_dataframe(self) -> pd.DataFrame:
+        stat = {k: [v] for k, v in self.get_statistics_as_dict().items() if k not in ["time", "users_busy", "cause"]}
         return pd.DataFrame.from_dict(stat, orient="columns")
 
     def get_theoretical_model_dataframe(self):
@@ -414,28 +435,30 @@ class ThreadRegulator:
             return round(es / ep, 2)
         return 1.0
 
-    def get_statistics(self) -> dict:
-        return {
-            "start_time": self.get_start_timestamp(),
-            "end_time": self.get_real_end_timestamp(),
-            "start": datetime.fromtimestamp(self.get_start_timestamp()).strftime("%Y-%m-%d %H:%M:%S.%f"),
-            "end": datetime.fromtimestamp(self.get_real_end_timestamp()).strftime("%Y-%m-%d %H:%M:%S.%f"),
-            "max_requests": self.get_max_executions(),
-            "requests_started": self.get_executions_started(),
-            "requests_completed": self.get_executions_completed(),
-            "requests_missing": max(self.get_max_executions() - self.get_executions_completed(), 0),
-            "execution_seconds": self.get_executions_call_period(),
-            "elapsed_seconds": self.get_elapsed_seconds(),
-            "rps": self.get_real_rps(),
-            "percentage_complete": self.get_percentage_complete(),
-            "success_ratio": self.get_success_ratio(),
-            "overall_success_ratio": self.get_success_ratio_overall(),
-            "ok": self.get_ok(),
-            "ko": self.get_ko(),
-            "block": self._get_block_id(),
-            "ts": self.get_defined_burst_ts(),
-            "safe_ts": self.get_user_threadsafe_period()
-        }
+    def get_statistics_as_dict(self) -> dict:
+        self._statistics.start_time = self.get_start_timestamp()
+        self._statistics.end_time = self.get_real_end_timestamp()
+        self._statistics.start = datetime.fromtimestamp(self.get_start_timestamp()).strftime("%Y-%m-%d %H:%M:%S.%f")
+        self._statistics.end = datetime.fromtimestamp(self.get_real_end_timestamp()).strftime("%Y-%m-%d %H:%M:%S.%f")
+        self._statistics.max_requests = self.get_max_executions()
+        self._statistics.requests_started = self.get_executions_started()
+        self._statistics.requests_completed = self.get_executions_completed()
+        self._statistics.requests_missing = max(self.get_max_executions() - self.get_executions_completed(), 0)
+        self._statistics.execution_seconds = self.get_executions_call_period()
+        self._statistics.elapsed_seconds = self.get_elapsed_seconds()
+        self._statistics.rps = self.get_real_rps()
+        self._statistics.percentage_complete = self.get_percentage_complete()
+        self._statistics.success_ratio = self.get_success_ratio()
+        self._statistics.overall_success_ratio = self.get_success_ratio_overall()
+        self._statistics.ok = self.get_ok()
+        self._statistics.ko = self.get_ko()
+        self._statistics.block = self._get_block_id()
+        self._statistics.ts = self.get_defined_burst_ts()
+        self._statistics.safe_ts = self.get_user_threadsafe_period()
+        return self._statistics.__dict__
+
+    def get_statistics(self) -> ThreadRegulatorStatistics:
+        return self._statistics
 
     def _get_thread_method(self):
         return self._run_control.method
@@ -633,14 +656,14 @@ class ThreadRegulator:
             func = self._notifier.method
             args = self._notifier.args
             kwargs = self._notifier.kwargs
-            stats = {
-                "time": str(datetime.now()),
-                "users_busy": len(self._get_busy_workers()),
-                "cause": cause
-            }
-            stats.update(self.get_statistics())
+
+            stats = self.get_statistics_as_dict()
+            stats["time"] = str(datetime.now())
+            stats["users_busy"] = len(self._get_busy_workers())
+            stats["cause"] = cause
+
             func(stats, *args, **kwargs)
-        except Exception as e:
+        except Exception:
             pass
 
     # </editor-fold>
