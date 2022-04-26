@@ -1,6 +1,7 @@
-from thread_regulator import ThreadRegulator, safe_sleep, create_regular, create_burst
+from thread_regulator import ThreadRegulator, create_regular, create_burst
 from thread_regulator.graphs import PerformanceGraphs
 from random import choice
+from time import sleep
 
 
 def demo_constant_rate():
@@ -10,7 +11,7 @@ def demo_constant_rate():
     def my_thread_call(user, *args, **kwargs):
         print(f"ExecutionUser{user}", args, kwargs)
         c = choice((0.1, 0.2, 0.3))
-        safe_sleep(c)
+        sleep(c)
         return c == 0.1
 
     tr = create_regular(users=2, rps=10.0, duration_sec=3.0, executions=0)
@@ -38,7 +39,7 @@ def demo_burst_mode():
     def my_thread_call(user, *args, **kwargs):
         #print(f"ExecutionUser{user}", args, kwargs)
         c = choice((0.1, 0.2, 0.3))
-        safe_sleep(c)
+        sleep(c)
         return c == 0.1
 
     tr = create_burst(users=4, rps=20.0, duration_sec=2.0, req=10, dt_sec=0.2, executions=0)

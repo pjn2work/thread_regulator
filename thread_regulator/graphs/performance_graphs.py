@@ -3,10 +3,11 @@ from os import path
 from io import BytesIO
 
 from dash import dash_table
+import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
-from thread_regulator import ThreadRegulator, pd
+from thread_regulator import ThreadRegulator
 
 
 # https://www.w3.org/TR/css-color-3/#svg-color
