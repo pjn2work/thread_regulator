@@ -4,9 +4,10 @@ Python class that allows to control thread execution in time (requests per secon
 
 ### Sample code
 ```python
-from thread_regulator import ThreadRegulator, safe_sleep, create_regular, create_burst
+from thread_regulator import ThreadRegulator, create_regular, create_burst
 from thread_regulator.graphs import PerformanceGraphs
 from random import choice
+from time import sleep
 
 
 def demo_constant_rate():
@@ -14,7 +15,7 @@ def demo_constant_rate():
         print(arg1, stats_dict)
 
     def my_thread_call(*args, **kwargs):
-        safe_sleep(choice((0.1, 0.2, 0.3)))
+        sleep(choice((0.1, 0.2, 0.3)))
         return True
 
     tr = create_regular(users=4, rps=10.0, duration_sec=1.0, executions=15)
@@ -31,7 +32,7 @@ def demo_burst_mode():
         print(arg1, stats_dict)
 
     def my_thread_call(*args, **kwargs):
-        safe_sleep(choice((0.1, 0.2, 0.3)))
+        sleep(choice((0.1, 0.2, 0.3)))
         return True
 
     tr = create_burst(users=4, rps=10.0, duration_sec=2.0, req=10, dt_sec=0.5, executions=20)
@@ -44,9 +45,10 @@ def demo_burst_mode():
     return tr
 
 
-def show_statistics(tr):
+def show_statistics(tr: ThreadRegulator):
     print("="*100)
-    print("Statistics:", tr.get_statistics())
+    print("Statistics dict:", tr.get_statistics_as_dict())
+    print("Statistics dataclass:", tr.get_statistics())
     print(f"Requests start_time jitter:\n{tr.get_execution_dataframe().start_ts.diff().describe()}")
     print(f"Requests call period: {tr.get_executions_call_period()}")
     print(f"Should be executed {tr.get_max_executions()} requests, and {tr.get_executions_started()} were executed, and {tr.get_executions_completed()} completed, and {tr.get_executions_missing()} missing.", )
