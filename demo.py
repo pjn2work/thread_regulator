@@ -1,7 +1,6 @@
-from thread_regulator import ThreadRegulator, create_regular, create_burst
+from thread_regulator import ThreadRegulator, safe_sleep, create_regular, create_burst
 from thread_regulator.graphs import PerformanceGraphs
 from random import choice
-from time import sleep
 
 
 def demo_constant_rate():
@@ -11,7 +10,7 @@ def demo_constant_rate():
     def my_thread_call(user, *args, **kwargs):
         print(f"ExecutionUser{user}", args, kwargs)
         c = choice((0.1, 0.2, 0.3))
-        sleep(c)
+        safe_sleep(c)
         return c == 0.1
 
     tr = create_regular(users=2, rps=10.0, duration_sec=3.0, executions=0)
@@ -19,7 +18,7 @@ def demo_constant_rate():
     print("="*100)
     tr.set_notifier(notify_method=my_notifier,
                     every_sec=1,
-                    every_exec=8,
+                    every_exec=4,
                     notify_method_args=("notify_arg_1", ),
                     notify_kwarg_2="someting")
     tr.start(my_thread_call, "arg1", "arg2", arg3="my_val_3", arg4="my_val_4")
@@ -39,7 +38,7 @@ def demo_burst_mode():
     def my_thread_call(user, *args, **kwargs):
         #print(f"ExecutionUser{user}", args, kwargs)
         c = choice((0.1, 0.2, 0.3))
-        sleep(c)
+        safe_sleep(c)
         return c == 0.1
 
     tr = create_burst(users=4, rps=20.0, duration_sec=2.0, req=10, dt_sec=0.2, executions=0)
@@ -48,7 +47,7 @@ def demo_burst_mode():
 
     tr.set_notifier(notify_method=my_notifier,
                     every_sec=1,
-                    every_exec=20,
+                    every_exec=10,
                     notify_method_args=("notify_arg_1", ),
                     notify_kwarg_2=True)
     tr.start(my_thread_call, "arg1", "arg2", arg3="my_val_3", arg4="my_val_4")
@@ -61,10 +60,9 @@ def demo_burst_mode():
     return tr
 
 
-def show_statistics(tr: ThreadRegulator):
+def show_statistics(tr):
     print("="*100)
-    print("Statistics dict:", tr.get_statistics_as_dict())
-    print("Statistics dataclass:", tr.get_statistics())
+    print("Statistics:", tr.get_statistics())
     print(f"Requests start_time jitter:\n{tr.get_execution_dataframe().start_ts.diff().describe()}")
     print(f"Requests call period: {tr.get_executions_call_period()}")
     print(f"Should be executed {tr.get_max_executions()} requests, and {tr.get_executions_started()} were executed, and {tr.get_executions_completed()} completed, and {tr.get_executions_missing()} missing.", )

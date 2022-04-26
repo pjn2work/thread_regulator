@@ -6,13 +6,9 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 
-install_requires = [
-    "pandas>=1.0.1",
-    "xlsxwriter>=1.2.9",
-    "openpyxl>=3.0.4",
-    "dash>=2.0.0",
-    "dash-bootstrap-components>=1.0.0"
-]
+with open("requirements.txt", "r") as fr:
+    install_requires = str(fr.read()).split("\n")
+print("requires:", install_requires)
 
 
 setup(
