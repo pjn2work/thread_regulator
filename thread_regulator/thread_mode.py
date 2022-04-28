@@ -131,7 +131,9 @@ class ThreadRegulator:
         return self
 
     def get_run_param(self) -> dict:
-        return self.run_parameters.__dict__
+        d = {k: v for k, v in self.run_parameters.__dict__.items()}
+        d["block"] = {k: v for k, v in self.run_parameters.block.__dict__.items()}
+        return d
 
     def is_mode_regular(self) -> bool:
         return self.run_parameters.mode == "regular"
