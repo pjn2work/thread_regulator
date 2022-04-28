@@ -42,7 +42,7 @@ def demo_burst_mode():
         sleep(c)
         return c == 0.1
 
-    tr = create_burst(users=4, rps=20.0, duration_sec=2.0, req=10, dt_sec=0.2, executions=0)
+    tr = create_burst(users=4, rps=20.0, duration_sec=4.0, req=10, dt_sec=0.2, executions=0)
     print(tr)
     print("="*100)
 
