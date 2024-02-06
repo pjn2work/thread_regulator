@@ -1,7 +1,7 @@
 from thread_regulator.thread_mode import ThreadRegulator
 
 
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 
 
 def create_regular(users: int, rps: float, duration_sec: float, executions: int) -> ThreadRegulator:

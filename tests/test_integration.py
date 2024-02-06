@@ -137,5 +137,5 @@ def test_burst_rate():
 
 
 if __name__ == "__main__":
-    #test_constant_rate()
+    test_constant_rate()
     test_burst_rate()

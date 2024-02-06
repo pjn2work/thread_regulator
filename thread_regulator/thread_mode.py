@@ -384,7 +384,7 @@ class ThreadRegulator:
     def _get_thread_method_kwargs(self):
         return self._run_control.kwargs
 
-    def _get_workers(self) -> set:
+    def _get_workers(self) -> list:
         return self._run_control.workers_thread_list
 
     def _add_worker(self, worker):
@@ -663,8 +663,8 @@ class ThreadRegulator:
 
 def frange(start, stop, step, precision=7):
     while start < stop:
-        yield start
-        start = round(start + step, precision)
+        yield round(start, precision)
+        start = start + step
 
 
 def safe_sleep(sec: float):

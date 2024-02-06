@@ -43,7 +43,7 @@ class PerformanceGraphs:
         for df_name in self._dataframes:
             self._dataframes[df_name].to_excel(xls_writer, index=True, header=True, sheet_name=df_name)
 
-        xls_writer.save()
+        xls_writer.close()
 
         return self
 
