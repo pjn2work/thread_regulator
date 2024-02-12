@@ -1,5 +1,15 @@
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Callable, NamedTuple, Any
+
+
+class ExecutionLog(NamedTuple):
+    start_ts: float
+    end_ts: float
+    success: bool
+    user: int
+    block: int
+    users_busy: int
+    request_result: Any
 
 
 @dataclass(init=True, repr=True, frozen=False)

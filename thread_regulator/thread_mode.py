@@ -80,7 +80,7 @@ class ThreadRegulator:
 
         # execution list with all entrys of:
         #    (time_request_started, time_request_ended, request_success, user_id, block_id, request_result)
-        self.execution_log = list()
+        self.execution_log: list[data_structs.ExecutionLog] = list()
 
     def _calc_max_executions_based_on_duration(self):
         # if no duration set then the maximum executions are the ones defined
@@ -102,17 +102,28 @@ class ThreadRegulator:
             return int(min(total_executions, self.get_defined_executions()))
 
         return total_executions
+
     # <editor-fold desc=" -= class common methods =- ">
 
     def set_notifier(self, notify_method=print, every_sec=5, every_exec=0, notify_method_args=tuple(), **notify_method_kwargs):
         """
-        :param notify_method: The method to be called
-        :param every_sec: Every x seconds the notify_method will be called
-        :param every_exec: Every x requests started the notify_method will be called
-        :param notify_method_args: Methods args that are sent back along with statistics
-        :param notify_method_kwargs: Methods kwargs that are sent back along with statistics
-        :return: will call the notify_method(stats_dict, *args, **kwargs)
-            {executions_started, elapsed_seconds, percentage_complete, success_ratio, ok, ko}
+        Set up a notifier for periodic execution notifications.
+
+        Parameters:
+        - notify_method (callable): The function or method to be called for notification.
+          Default is the built-in 'print' function.
+        - every_sec (int): Every x seconds, at which the notifier should be executed.
+          Default is 5 seconds.
+        - every_exec (int): Every x executions, at which the notifier should be executed.
+          Default is 0, don't depend on the executions but on seconds.
+        - notify_method_args (tuple): Tuple of arguments to be passed to the notify_method.
+          Default is an empty tuple.
+        - **notify_method_kwargs: Additional keyword arguments to be passed to the notify_method.
+
+        ```
+        # stats_dict = {executions_started, elapsed_seconds, percentage_complete, success_ratio, ok, ko}
+        notify_method(stats_dict, *args, **kwargs)
+        ```
         """
         assert callable(notify_method), "'notify_method' must be a valid callable method with args"
         assert isinstance(notify_method_args, (tuple, list)), "'notify_method_args' must be a tuple or list"
@@ -177,14 +188,14 @@ class ThreadRegulator:
     def get_max_executions(self):
         return self.run_parameters.max_executions
 
-    def get_execution_list(self) -> list:
+    def get_execution_list(self) -> list[data_structs.ExecutionLog]:
         return self.execution_log
 
     def get_execution_counter_of_responses(self) -> dict:
-        return dict(Counter([row[-1] for row in self.execution_log]).items())
+        return dict(Counter([row.request_result for row in self.execution_log]).items())
 
     def get_execution_dataframe(self, index_on_end: bool = False, group_sec: int = None) -> pd.DataFrame:
-        df = pd.DataFrame(self.get_execution_list(), columns=("start_ts", "end_ts", "success", "user", "block", "users_busy", "request_result"))
+        df = pd.DataFrame(self.get_execution_list(), columns=data_structs.ExecutionLog._fields)
 
         # to set the executions to start on second x.000
         ms_diff = df.start_ts.min()
@@ -424,7 +435,7 @@ class ThreadRegulator:
     def _get_rc_block_next_run(self) -> float:
         return self._run_control.block.next_run
 
-    def _set_rc_block_next_run(self, when):
+    def _set_rc_block_next_run(self, when: float):
         self._run_control.block.next_run = when + self.get_defined_burst_ts()
 
     def _get_rc_block_requests_left(self) -> int:
@@ -537,8 +548,12 @@ class ThreadRegulator:
     def _add_to_execution_log(self, start_time: float, end_time: float, success:bool, request_result: object, user: int, block_id: int, stat_lock: Lock):
         stat_lock.acquire()
         self._inc_success_result(success)
-        self.execution_log.append((start_time, end_time, success, user, block_id, len(self._get_busy_workers()), request_result))
+
+        _lap = data_structs.ExecutionLog(start_time, end_time, success, user, block_id, len(self._get_busy_workers()), request_result)
+        self.execution_log.append(_lap)
+
         self._remove_worker_as_busy(user)
+
         total_finished = self.get_executions_completed()
         stat_lock.release()
 
@@ -552,7 +567,6 @@ class ThreadRegulator:
     def _notify_by_exec(self, total_finished):
         if self._notifier.every_exec and self._notifier.method:
             if total_finished % self._notifier.every_exec == 0:
-                # self._notify_progress(f"finished={total_finished}")
                 Thread(target=self._notify_progress, args=(f"finished={total_finished}",)).start()
 
     def _notify_by_time(self):
@@ -592,7 +606,7 @@ class ThreadRegulator:
     def _worker_function(self, user: int, run_lock: Lock, stat_lock: Lock):
         while True:
             block_id = self._has_task(user, run_lock)
-            if not block_id:
+            if block_id == 0:
                 break
 
             func = self._get_thread_method()
@@ -659,6 +673,9 @@ class ThreadRegulator:
 
     def __str__(self):
         return f"{repr(self)}".replace("'", "\"")
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}{str(self.run_parameters).replace('_RunParameters', '')}"
 
 
 def frange(start, stop, step, precision=7):

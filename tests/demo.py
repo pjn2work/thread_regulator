@@ -9,9 +9,9 @@ def demo_constant_rate():
         print("NotifierMethod", arg1, kwargs, stats_dict)
 
     def my_thread_call(user, *args, **kwargs):
-        print(f"ExecutionUser{user}", args, kwargs)
         c = choice((0.1, 0.2, 0.3))
         sleep(c)
+        print(f"ExecutionUser{user} for {c} seconds", args, kwargs)
         return c == 0.1
 
     tr = create_regular(users=2, rps=10.0, duration_sec=3.0, executions=0)
